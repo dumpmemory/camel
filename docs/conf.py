@@ -1,16 +1,16 @@
-# =========== Copyright 2023 @ CAMEL-AI.org. All Rights Reserved. ===========
-# Licensed under the Apache License, Version 2.0 (the “License”);
+# ========= Copyright 2023-2024 @ CAMEL-AI.org. All Rights Reserved. =========
+# Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an “AS IS” BASIS,
+# distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# =========== Copyright 2023 @ CAMEL-AI.org. All Rights Reserved. ===========
+# ========= Copyright 2023-2024 @ CAMEL-AI.org. All Rights Reserved. =========
 # Configuration file for the Sphinx documentation builder.
 #
 # For the full list of built-in configuration values, see the documentation:
@@ -25,23 +25,25 @@ import sys
 sys.path.insert(0, os.path.abspath('..'))
 
 project = 'CAMEL'
-copyright = '2023, CAMEL-AI.org'
+copyright = '2024, CAMEL-AI.org'
 author = 'CAMEL-AI.org'
-release = '0.1.0'
+release = '0.2.16'
+
+html_favicon = (
+    'https://raw.githubusercontent.com/camel-ai/camel/master/misc/favicon.png'
+)
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-source_suffix = {
-    '.rst': 'restructuredtext',
-    '.md': 'markdown',
-}
+source_suffix = ['.rst', '.md']
 
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.viewcode',
     'sphinx.ext.napoleon',
-    'recommonmark',
+    'myst_parser',
+    'nbsphinx',
 ]
 
 templates_path = ['_templates']
@@ -51,3 +53,38 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'sphinx_book_theme'
+
+html_theme_options = {
+    "logo": {
+        "text": f"CAMEL {release}",
+        "image_light": "https://raw.githubusercontent.com/camel-ai/camel/master/misc/logo_light.png",
+        "image_dark": "https://raw.githubusercontent.com/camel-ai/camel/master/misc/logo_light.png",
+    },
+    "show_toc_level": 2,
+    "show_nav_level": 2,
+    "navigation_with_keys": True,
+    "toc_title": "On this page",
+    "show_navbar_depth": 2,
+    "repository_url": "https://github.com/camel-ai/camel",
+    "use_repository_button": True,
+    "use_issues_button": True,
+    "use_edit_page_button": True,
+}
+
+html_static_path = ['_static']
+html_css_files = ['custom.css']
+
+nbsphinx_execute = 'never'
+nbsphinx_allow_errors = True
+nbsphinx_prolog = r"""
+{% set docname = env.doc2path(env.docname, base=None) %}
+
+.. raw:: html
+
+    <style>
+    div.nbinput div.prompt,
+    div.nboutput div.prompt {
+        display: none;
+    }
+    </style>
+"""
