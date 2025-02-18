@@ -1,23 +1,22 @@
-# =========== Copyright 2023 @ CAMEL-AI.org. All Rights Reserved. ===========
-# Licensed under the Apache License, Version 2.0 (the “License”);
+# ========= Copyright 2023-2024 @ CAMEL-AI.org. All Rights Reserved. =========
+# Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an “AS IS” BASIS,
+# distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# =========== Copyright 2023 @ CAMEL-AI.org. All Rights Reserved. ===========
+# ========= Copyright 2023-2024 @ CAMEL-AI.org. All Rights Reserved. =========
 import concurrent.futures
 import json
 import os
 from typing import Dict
 
 from camel.agents import ChatAgent
-from camel.messages import BaseMessage
 
 # Directory containing your json files of CAMEL conversations
 # This code will append a new key called "gpt_solution" to each json file
@@ -30,16 +29,12 @@ save_dir = "./camel_data/ai_society_solution_extraction_save"
 
 def process_file(data: Dict[str, str]) -> None:
     print(data["id"])
-    assistant_sys_msg = BaseMessage.make_assistant_message(
-        role_name="Assistant",
-        content="You are a helpful assistant.",
-    )
+    assistant_sys_msg = "You are a helpful assistant."
     agent = ChatAgent(assistant_sys_msg)
     agent.reset()
 
     prompt = "Solve the following task:\n" + data["specified_task"]
-    user_msg = BaseMessage.make_user_message(role_name="User", content=prompt)
-    assistant_response = agent.step(user_msg)
+    assistant_response = agent.step(prompt)
     print(assistant_response.msg.content)
 
     # Append solution to JSON file as "gpt_solution"
