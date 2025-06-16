@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 from openai import AsyncStream
 
 from camel.configs import MISTRAL_API_PARAMS, MistralConfig
+from camel.logger import get_logger
 from camel.messages import OpenAIMessage
 from camel.models import BaseModelBackend
 from camel.models._utils import try_modify_message_with_format
@@ -34,7 +35,12 @@ from camel.utils import (
     OpenAITokenCounter,
     api_keys_required,
     dependencies_required,
+    get_current_agent_session_id,
+    update_current_observation,
+    update_langfuse_trace,
 )
+
+logger = get_logger(__name__)
 
 try:
     if os.getenv("AGENTOPS_API_KEY") is not None:
@@ -43,6 +49,14 @@ try:
         raise ImportError
 except (ImportError, AttributeError):
     LLMEvent = None
+
+if os.environ.get("LANGFUSE_ENABLED", "False").lower() == "true":
+    try:
+        from langfuse.decorators import observe
+    except ImportError:
+        from camel.utils import observe
+else:
+    from camel.utils import observe
 
 
 class MistralModel(BaseModelBackend):
@@ -95,7 +109,7 @@ class MistralModel(BaseModelBackend):
             model_type, model_config_dict, api_key, url, token_counter, timeout
         )
         self._client = Mistral(
-            timeout_ms=int(self._timeout)
+            timeout_ms=int(self._timeout * 1000)
             if self._timeout is not None
             else None,
             api_key=self._api_key,
@@ -229,14 +243,74 @@ class MistralModel(BaseModelBackend):
             )
         return self._token_counter
 
+    @observe(as_type="generation")
     async def _arun(
         self,
         messages: List[OpenAIMessage],
         response_format: Optional[Type[BaseModel]] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
     ) -> Union[ChatCompletion, AsyncStream[ChatCompletionChunk]]:
-        raise NotImplementedError("Mistral does not support async inference.")
+        logger.warning(
+            "Mistral does not support async inference, using sync "
+            "inference instead."
+        )
+        update_current_observation(
+            input={
+                "messages": messages,
+                "response_format": response_format,
+                "tools": tools,
+            },
+            model=str(self.model_type),
+            model_parameters=self.model_config_dict,
+        )
+        # Update Langfuse trace with current agent session and metadata
+        agent_session_id = get_current_agent_session_id()
+        if agent_session_id:
+            update_langfuse_trace(
+                session_id=agent_session_id,
+                metadata={
+                    "source": "camel",
+                    "agent_id": agent_session_id,
+                    "agent_type": "camel_chat_agent",
+                    "model_type": str(self.model_type),
+                },
+                tags=["CAMEL-AI", str(self.model_type)],
+            )
 
+        request_config = self._prepare_request(
+            messages, response_format, tools
+        )
+        mistral_messages = self._to_mistral_chatmessage(messages)
+
+        response = self._client.chat.complete(
+            messages=mistral_messages,
+            model=self.model_type,
+            **request_config,
+        )
+
+        openai_response = self._to_openai_response(response)  # type: ignore[arg-type]
+
+        update_current_observation(
+            usage=openai_response.usage,
+        )
+
+        # Add AgentOps LLM Event tracking
+        if LLMEvent:
+            llm_event = LLMEvent(
+                thread_id=openai_response.id,
+                prompt=" ".join(
+                    [message.get("content") for message in messages]  # type: ignore[misc]
+                ),
+                prompt_tokens=openai_response.usage.prompt_tokens,  # type: ignore[union-attr]
+                completion=openai_response.choices[0].message.content,
+                completion_tokens=openai_response.usage.completion_tokens,  # type: ignore[union-attr]
+                model=self.model_type,
+            )
+            record(llm_event)
+
+        return openai_response
+
+    @observe(as_type="generation")
     def _run(
         self,
         messages: List[OpenAIMessage],
@@ -256,6 +330,28 @@ class MistralModel(BaseModelBackend):
         Returns:
             ChatCompletion: The response from the model.
         """
+        update_current_observation(
+            input={
+                "messages": messages,
+                "tools": tools,
+            },
+            model=str(self.model_type),
+            model_parameters=self.model_config_dict,
+        )
+        # Update Langfuse trace with current agent session and metadata
+        agent_session_id = get_current_agent_session_id()
+        if agent_session_id:
+            update_langfuse_trace(
+                session_id=agent_session_id,
+                metadata={
+                    "source": "camel",
+                    "agent_id": agent_session_id,
+                    "agent_type": "camel_chat_agent",
+                    "model_type": str(self.model_type),
+                },
+                tags=["CAMEL-AI", str(self.model_type)],
+            )
+
         request_config = self._prepare_request(
             messages, response_format, tools
         )
@@ -268,6 +364,10 @@ class MistralModel(BaseModelBackend):
         )
 
         openai_response = self._to_openai_response(response)  # type: ignore[arg-type]
+
+        update_current_observation(
+            usage=openai_response.usage,
+        )
 
         # Add AgentOps LLM Event tracking
         if LLMEvent:
